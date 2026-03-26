@@ -6,6 +6,7 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { parse } = require('csv-parse/sync');
 const XLSX = require('xlsx');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = 3001;
@@ -40,6 +41,9 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage, defParamCharset: 'utf8' });
+
+const fotoLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false });
+const importLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
 
 app.use(cors());
 app.use(express.json());
@@ -138,7 +142,7 @@ app.delete('/api/tillatelser/:id', (req, res) => {
   res.json({ success: true });
 });
 
-app.get('/api/tillatelser/:id/foto', (req, res) => {
+app.get('/api/tillatelser/:id/foto', fotoLimiter, (req, res) => {
   const tillatelser = loadData();
   const t = tillatelser.find(x => x.id === req.params.id);
   if (!t || !t.foto) return res.status(404).json({ error: 'No photo' });
@@ -147,7 +151,7 @@ app.get('/api/tillatelser/:id/foto', (req, res) => {
   res.sendFile(filePath);
 });
 
-app.post('/api/import', upload.single('file'), (req, res) => {
+app.post('/api/import', importLimiter, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
   const ext = path.extname(req.file.originalname).toLowerCase();
