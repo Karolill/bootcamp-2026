@@ -33,14 +33,14 @@ function saveData(data) {
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, 'uploads'));
+    cb(null, UPLOADS_DIR);
   },
   filename: function (req, file, cb) {
     cb(null, Date.now() + '-' + file.originalname);
   }
 });
 
-const upload = multer({ storage, defParamCharset: 'utf8' });
+const upload = multer({ storage });
 
 const fotoLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false });
 const importLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
@@ -215,6 +215,6 @@ app.post('/api/import', importLimiter, upload.single('file'), (req, res) => {
   res.json({ count, errors });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Tillatelsesregister backend running on http://localhost:${PORT}`);
 });
