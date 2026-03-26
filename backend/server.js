@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { parse } = require('csv-parse/sync');
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const rateLimit = require('express-rate-limit');
 
 const app = express();
@@ -151,7 +151,7 @@ app.get('/api/tillatelser/:id/foto', fotoLimiter, (req, res) => {
   res.sendFile(filePath);
 });
 
-app.post('/api/import', importLimiter, upload.single('file'), (req, res) => {
+app.post('/api/import', importLimiter, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
   const ext = path.extname(req.file.originalname).toLowerCase();
@@ -163,9 +163,21 @@ app.post('/api/import', importLimiter, upload.single('file'), (req, res) => {
       const content = fs.readFileSync(req.file.path, 'utf8');
       rows = parse(content, { columns: true, skip_empty_lines: true, trim: true });
     } else if (ext === '.xlsx' || ext === '.xls' || mimetype.includes('spreadsheet') || mimetype.includes('excel')) {
-      const workbook = XLSX.readFile(req.file.path);
-      const sheetName = workbook.SheetNames[0];
-      rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.readFile(req.file.path);
+      const worksheet = workbook.worksheets[0];
+      if (!worksheet) throw new Error('No worksheet found in file');
+      const headers = [];
+      worksheet.getRow(1).eachCell((cell) => { headers.push(String(cell.value || '')); });
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return;
+        const obj = {};
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          const header = headers[colNumber - 1];
+          if (header) obj[header] = cell.value !== null && cell.value !== undefined ? String(cell.value) : '';
+        });
+        rows.push(obj);
+      });
     } else {
       return res.status(400).json({ error: 'Unsupported file type. Use .csv or .xlsx' });
     }
